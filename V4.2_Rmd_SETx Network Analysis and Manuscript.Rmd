@@ -1,0 +1,2517 @@
+
+
+# Project Background. 
+This research utilized qualitative and survey data collection methods to better understand how governance actors address flood vulnerability in Southeast Texas. Thematic coding of interview transcripts were used to create fuzzy cognitive maps (FCMs) via Miro. The data collected via survey's were used to create governance network maps of organizations and their relationships between each other addressing different flood-related issues
+
+
+
+
+
+
+
+```{r, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:/Users/ka34292/Desktop/R Code and Analysis")
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+
+```{r}
+
+rm(list = ls()) #this clears my working environment
+
+library(tidyverse)
+library(janitor)
+library(Hmisc)
+library(qualtRics)
+library(visNetwork)
+library(igraph)
+library(MetBrewer)
+library(shiny)
+library(shinyWidgets)
+library(kableExtra)
+library(tidyverse)
+library(igraph)
+library(sna)
+library(ndtv)
+library(tsna)
+library(networkDynamic)
+library(mice)
+library(network)
+library(ergm) 
+
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+collab_edges<-read.csv("el_collab.csv")
+collab_edges<-collab_edges[-c(1)]
+
+collab_edges<-subset(collab_edges, collab_edges$ego != collab_edges$alter)
+
+prepare_edges<-read.csv("el_prepare.csv")
+prepare_edges<-prepare_edges[-c(1)]
+
+prepare_edges<-subset(prepare_edges, prepare_edges$ego != prepare_edges$alter)
+
+respond_edges<-read.csv("el_respond.csv")
+respond_edges<-respond_edges[-c(1)]
+respond_edges<-subset(respond_edges, respond_edges$ego != respond_edges$alter)
+
+
+
+collab<-read.csv("SETxNetwork.csv")
+df<-read.csv("SETxdf.csv")
+#collab<-collab[-c(14:16, 39:42),]pre
+
+#graph object
+g1 <- graph_from_data_frame(d=collab_edges,directed=TRUE) 
+
+my_kable = function(x, max.rows=15, ...) {
+  kable(x[1:max.rows, ], ...)
+}
+
+#Prepardness edges
+geo_prepare_edges<-read.csv("el_geoprepare.csv")|>
+  select(-(X))
+infra_prepare_edges<-read.csv("el_infraprepare.csv")|>
+  select(-(X))
+pop_prepare_edges<-read.csv("el_populaprepare.csv")|>
+  select(-(X))
+precip_prepare_edges<-read.csv("el_precipprepare.csv")|>
+  select(-(X))
+socio_prepare_edges<-read.csv("el_socioprepare.csv")|>
+  select(-(X))
+
+#Response and Recovery edgelists
+infra_respond_edges<-read.csv("el_infrarespond.csv")|>
+  select(-(X))
+eco_respond_edges<-read.csv("el_ecorespond.csv")|>
+  select(-(X))
+econ_respond_edges<-read.csv("el_econrespond.csv")|>
+  select(-(X))
+socio_respond_edges<-read.csv("el_sociorespond.csv")|>
+  select(-(X))
+
+```
+
+# SETx Survey Analysis
+
+## Perceived drivers and impact of flooding
+
+Perceived drivers and impact of flooding. 
+
+
+```{r drivers}
+drivers <- df |>
+  select(
+    response_id,
+    name,
+    starts_with("below_are_a_list_of_drivers"),
+    starts_with("below_are_a_list_of_flood")
+  ) |>
+  #renaming for comprehensibility purposes
+  rename_with(
+    ~ gsub(
+      'below_are_a_list_of_drivers_of_flood_risk_using_the_slider_tool_please_indicate_how_important_each_issue_below_is_to_you_your_organization_1_not_important_10_extremely_important',
+      'drivers',
+      .x
+    )
+  ) |> 
+  rename_with(
+    ~ gsub(
+      'below_are_a_list_of_flood_impacts_using_the_slider_tool_please_indicate_how_important_each_issue_below_is_to_you_your_organization_1_not_important_10_extremely_important',
+      'impacts',
+      .x
+    )
+  )
+
+
+```
+
+This code sets a descriptive bar chart of the average responses to "drivers of flooding".
+
+```{r drivers barplot}
+driver_bar <- drivers |> 
+  select(name, 3:7) |> 
+  pivot_longer(cols = starts_with("drivers"),
+               names_to = "driver",
+               values_to = "value") |> 
+  filter(!is.na(value)) |> 
+  mutate(driver = gsub("drivers", "", driver),
+         driver = gsub("_", " ", driver),
+         driver = str_to_title(driver)) |> 
+  group_by(driver) |> 
+  dplyr::summarize(avg = round(mean(value, na.rm = TRUE),2), sd = sd(value, na.rm = TRUE))
+
+driver_bar$driver[driver_bar$driver == " Geographic And Geophysical Factors Topography Proximity To Water Bodies"] <- "Geographic And Geophysical Factors\n Topography Proximity To Water Bodies"
+
+
+theme_set(theme_classic())
+ ggplot(driver_bar, aes(reorder(driver, avg), avg)) +
+   geom_bar(stat = "identity", fill = "#007ba5") +
+   scale_fill_manual(values=met.brewer("Egypt", 5)) +
+   labs(title = "Perceived Drivers of Flooding Risk",
+        subtitle = "(On a scale from 0-10)",
+        x = "",
+        y = ""
+        ) +
+   coord_flip() 
+
+```
+
+This code sets a descriptive bar chart of the average responses to "impacts of flooding."
+
+```{r impacts}
+
+impact_bar <- drivers |> 
+  select(name, 10:13) |> 
+  pivot_longer(cols = starts_with("impac"),
+               names_to = "impact",
+               values_to = "value") |> 
+  filter(!is.na(value)) |> 
+  mutate(impact = gsub("impacts", "", impact),
+         impact = gsub("_", " ", impact),
+         impact = str_to_title(impact)) |> 
+  group_by(impact) |> 
+  dplyr::summarize(avg = round(mean(value, na.rm = TRUE),2), sd = sd(value, na.rm = TRUE))
+
+impact_bar$impact[impact_bar$impact == " Ecological  E G  To Beaches Rivers Habitat Trails"] <- "Ecological  Impacts  to\n Beaches Rivers Habitat Trails"
+
+impact_bar$impact[impact_bar$impact == " Economic  Lost Revenue Costs Of Recovery"] <- "Economic  Lost Revenue\n Costs of Recovery"
+
+impact_bar$impact[impact_bar$impact == " Infrastructure  Telecommunication Energy Transportation"] <- "Infrastructure  Telecommunication\n Energy Transportation"
+
+impact_bar$impact[impact_bar$impact == " Social  Population Displacement Health Social Inequalities"] <- "Social  Population Displacement\n Health Social Inequalities"
+
+theme_set(theme_classic())
+ ggplot(impact_bar, aes(reorder(impact, avg), avg)) +
+   geom_bar(stat = "identity", fill = "#00b67e") +
+   scale_fill_manual(values=met.brewer("Egypt", 5)) +
+   labs(title = "Perceived Impact of Flooding Importance",
+        subtitle = "(On a scale from 0-10)",
+        x = "",
+        y = ""
+        ) +
+   coord_flip() 
+
+```
+
+# SETx Network Map and Centrality Analysis
+
+```{r}
+
+nodelist <- collab_edges |>
+  select(ego,alter) |>
+  pivot_longer(cols = c('ego', 'alter'),
+               names_to = "ego_alter",
+               values_to = "name") |> 
+  filter(!is.na(name))|> 
+  arrange(desc(ego_alter))|>
+  distinct(name, .keep_all = TRUE)|>
+  arrange(name)
+
+write.csv(nodelist, "Nodelist 12_16.csv")
+```
+
+## SETx Network - All Issues
+
+Considering the past 2 years, whom you go to flood-related meetings (virtually or in-person), receive or share advice or information, or implement projects within or across the Southeast Texas region.
+
+```{r}
+inDegree1<-igraph::degree(g1,mode="in")
+outDegree1<-igraph::degree(g1,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1))
+betweenness1 <- igraph::betweenness(g1, v = V(g1), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1, vids = V(g1), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1, vids = V(g1), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1) # Total Nodes
+netstats[2]<-ecount(g1) # Total Ties 
+netstats[3]<-ecount(g1)/vcount(g1) # Average ties per node
+netstats[4]<-dyad_census(g1)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1) # Reciprocity
+netstats[8]<-edge_density(g1) # Density
+netstats[9]<-transitivity(g1) # Transitivity 
+netstats[10]<-centralization.degree(g1)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable <- data.frame(
+  Network_Statistic = c("Total Node", "Total Ties", "Average Ties per Org", 
+                        "Mutual Nodes \n (Pairs of vertices with two directed edges)",
+                        "Assymetric Nodes \n(Pairs of vertices with one directed edge)",
+                        "Unconnected Nodes \n (Pairs of vertices with no directed edges)",
+                        "Reciprocity", "Density", "Transitivity", "Centralization"),
+  Value = round(netstats, 3)
+)
+# Create combined_stats dataframe
+
+
+# Merge combined_stats with statstable
+combined_stats <- statstable
+
+colnames(combined_stats)[ncol(combined_stats)] <- "All Issues"
+
+```
+
+```{r}
+#color by org type
+for (i in 1:vcount(g1))
+{
+V(g1)[i]$orgtype<-a1$org_type[which(a1$name==V(g1)[i]$name)]
+}
+
+V(g1)[V(g1)$orgtype=="Academia"]$color <-"orange"
+V(g1)[V(g1)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1)[V(g1)$orgtype=="Federal agency"]$color <- "gold"
+V(g1)[V(g1)$orgtype=="State agency"]$color <- "purple"
+V(g1)[V(g1)$orgtype=="County agency"]$color <- "red"
+V(g1)[V(g1)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1)[V(g1)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1))
+{
+V(g1)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1)[i]$name)]
+}
+
+V(g1)$size<-V(g1)$size*1.2
+
+
+gvis<-toVisNetworkData(g1)
+
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETxnetwork<-
+  visNetwork(nodes,edges, main="SETx Network - All Issues",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+DF_Centrality<-left_join(DF_Centrality, a1, by="name")
+
+write.csv(DF_Centrality, "SETx Centrality.csv")
+```
+
+### SETx Network-Network Viz-All Issues
+
+```{r, include=TRUE}
+SETxnetwork
+```
+
+### SETx Network-Whole network stats-All Issues
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Node level stats-All Issues
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Network composition-All Issues
+
+```{r}
+composition1<-group_by(DF_Centrality, org_type)|>
+     summarise(
+        count = n(),
+        composition_pct =n()/59*100,
+        OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+        IndegreeMean=mean(inDegree1, na.rm = TRUE),
+        BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition1<-as.data.frame(composition1)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition1,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+# SETx Prepare and Mitigate
+
+Now that we've run this for the full "collab" model, let's repeat for the prepare model
+
+```{r}
+g1_pr <- graph_from_data_frame(d=prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_pr)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_pr,mode="in")
+outDegree1<-igraph::degree(g1_pr,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_pr))
+betweenness1 <- igraph::betweenness(g1_pr, v = V(g1_pr), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1_pr, vids = V(g1_pr), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_pr, vids = V(g1_pr), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_pr) # Total Nodes
+netstats[2]<-ecount(g1_pr) # Total Ties 
+netstats[3]<-ecount(g1_pr)/vcount(g1_pr) # Average ties per node
+netstats[4]<-dyad_census(g1_pr)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_pr)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_pr)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_pr) # Reciprocity
+netstats[8]<-edge_density(g1_pr) # Density
+netstats[9]<-transitivity(g1_pr) # Transitivity 
+netstats[10]<-centralization.degree(g1_pr)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Prepare and Mitigate"
+
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_pr))
+{
+V(g1_pr)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_pr)[i]$name)]
+}
+
+V(g1_pr)[V(g1_pr)$orgtype=="Academia"]$color <-"orange"
+V(g1_pr)[V(g1_pr)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_pr)[V(g1_pr)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_pr)[V(g1_pr)$orgtype=="State agency"]$color <- "purple"
+V(g1_pr)[V(g1_pr)$orgtype=="County agency"]$color <- "red"
+V(g1_pr)[V(g1_pr)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_pr)[V(g1_pr)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_pr))
+{
+V(g1_pr)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_pr)[i]$name)]
+}
+
+V(g1_pr)$size<-V(g1_pr)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_pr)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETxprepare<-
+  visNetwork(nodes,edges, main="SETx Prepare and Mitigate Network",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### SETx Network-Network Viz-Prepare and Mitigate
+
+```{r, include=TRUE}
+SETxprepare
+```
+
+### SETx Network-Whole network stats-Prepare and Mitigate
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Nodel level stats-Prepare and Mitigate
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Network composition-Prepare and Mitigate
+
+```{r, include=TRUE}
+composition2<-group_by(a1, org_type)|>
+     summarise(
+        count = n(),
+        composition_pct =n()/57*100,
+        OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+        IndegreeMean=mean(inDegree1, na.rm = TRUE),
+        BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition2<-as.data.frame(composition2)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition2,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+# SETx Respond, Recovery, Rebuild
+Who do you work with to respond, recover, or rebuild?
+
+```{r}
+g1_rr <- graph_from_data_frame(d=respond_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_rr)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_rr,mode="in")
+outDegree1<-igraph::degree(g1_rr,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_rr))
+betweenness1 <- igraph::betweenness(g1_rr, v = V(g1_rr), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1_rr, vids = V(g1_rr), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_rr, vids = V(g1_rr), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_rr) # Total Nodes
+netstats[2]<-ecount(g1_rr) # Total Ties 
+netstats[3]<-ecount(g1_rr)/vcount(g1_rr) # Average ties per node
+netstats[4]<-dyad_census(g1_rr)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_rr)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_rr)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_rr) # Reciprocity
+netstats[8]<-edge_density(g1_rr) # Density
+netstats[9]<-transitivity(g1_rr) # Transitivity 
+netstats[10]<-centralization.degree(g1_rr)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Respond, Recovery, Rebuild"
+
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_rr))
+{
+  V(g1_rr)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_rr)[i]$name)]
+}
+
+V(g1_rr)[V(g1_rr)$orgtype=="Academia"]$color <-"orange"
+V(g1_rr)[V(g1_rr)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_rr)[V(g1_rr)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_rr)[V(g1_rr)$orgtype=="State agency"]$color <- "purple"
+V(g1_rr)[V(g1_rr)$orgtype=="County agency"]$color <- "red"
+V(g1_rr)[V(g1_rr)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_rr)[V(g1_rr)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_rr))
+{
+  V(g1_rr)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_rr)[i]$name)]
+}
+
+V(g1_rr)$size<-V(g1_rr)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_rr)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETxrespond<-
+  visNetwork(nodes,edges, main="SETx Network - Respond, Recover, Rebuild",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### SETx Network-Network Viz-Respond/Recover/Rebuild
+
+```{r, include=TRUE}
+SETxrespond
+```
+
+### SETx Network-Whole network stats-Respond/Recover/Rebuild
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Nodel level stats-Respond/Recover/Rebuild
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### SETx Network-Network Composition-Respond/Recover/Rebuild
+
+```{r, include=TRUE}
+composition3<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/56*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition3<-as.data.frame(composition3)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition3,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+# Prepare and Mitigate - Issue Networks
+
+## Prepare and mitigate - Precipitation and Weather
+
+Who do you work with to prepare for and mitigate the following drivers of flooding of importance to you/your organization?
+  - Changing precipitation and weather patterns
+
+```{r}
+g1_precip_prepare <- graph_from_data_frame(d=precip_prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_precip_prepare)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_precip_prepare,mode="in")
+outDegree1<-igraph::degree(g1_precip_prepare,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_precip_prepare))
+betweenness1 <- igraph::betweenness(g1_precip_prepare, v = V(g1_precip_prepare), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1_precip_prepare, vids = V(g1_precip_prepare), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_precip_prepare, vids = V(g1_precip_prepare), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_precip_prepare) # Total Nodes
+netstats[2]<-ecount(g1_precip_prepare) # Total Ties 
+netstats[3]<-ecount(g1_precip_prepare)/vcount(g1_precip_prepare) # Average ties per node
+netstats[4]<-dyad_census(g1_precip_prepare)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_precip_prepare)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_precip_prepare)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_precip_prepare) # Reciprocity
+netstats[8]<-edge_density(g1_precip_prepare) # Density
+netstats[9]<-transitivity(g1_precip_prepare) # Transitivity 
+netstats[10]<-centralization.degree(g1_precip_prepare)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Pr- Precipitation and Weather"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_precip_prepare))
+{
+  V(g1_precip_prepare)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_precip_prepare)[i]$name)]
+}
+
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="Academia"]$color <-"orange"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="State agency"]$color <- "purple"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="County agency"]$color <- "red"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_precip_prepare)[V(g1_precip_prepare)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_precip_prepare))
+{
+  V(g1_precip_prepare)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_precip_prepare)[i]$name)]
+}
+
+V(g1_precip_prepare)$size<-V(g1_precip_prepare)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_precip_prepare)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_precip_prepare<-
+  visNetwork(nodes,edges, main="SETx Prepare/Mitigate Precipitation and Weather Drivers",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Precipitation/Weather-Network Viz-Prepare
+
+```{r, include=TRUE}
+SETx_precip_prepare
+```
+
+### Precipitation/Weather-Whole network stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Precipitation/Weather-Node level stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Precipitation/Weather-Network composition-Prepare
+
+```{r}
+composition4<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/55*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition4<-as.data.frame(composition4)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition4,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+## Prepare and mitigate - Geographic and Geophysical
+
+Who do you work with to prepare for and mitigate the following drivers of flooding of importance to you/your organization?
+  - Geographic and geophysical factors (topography, proximity to water bodies)
+
+```{r}
+g1_geo_prepare <- graph_from_data_frame(d=geo_prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_geo_prepare)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_geo_prepare,mode="in")
+outDegree1<-igraph::degree(g1_geo_prepare,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_geo_prepare))
+betweenness1 <- igraph::betweenness(g1_geo_prepare, v = V(g1_geo_prepare), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1_geo_prepare, vids = V(g1_geo_prepare), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_geo_prepare, vids = V(g1_geo_prepare), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_geo_prepare) # Total Nodes
+netstats[2]<-ecount(g1_geo_prepare) # Total Ties 
+netstats[3]<-ecount(g1_geo_prepare)/vcount(g1_geo_prepare) # Average ties per node
+netstats[4]<-dyad_census(g1_geo_prepare)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_geo_prepare)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_geo_prepare)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_geo_prepare) # Reciprocity
+netstats[8]<-edge_density(g1_geo_prepare) # Density
+netstats[9]<-transitivity(g1_geo_prepare) # Transitivity 
+netstats[10]<-centralization.degree(g1_geo_prepare)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Pr- Geographic and Geophysical"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_geo_prepare))
+{
+  V(g1_geo_prepare)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_geo_prepare)[i]$name)]
+}
+
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="Academia"]$color <-"orange"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="State agency"]$color <- "purple"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="County agency"]$color <- "red"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_geo_prepare)[V(g1_geo_prepare)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_geo_prepare))
+{
+  V(g1_geo_prepare)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_geo_prepare)[i]$name)]
+}
+
+V(g1_geo_prepare)$size<-V(g1_geo_prepare)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_geo_prepare)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_geo_prepare<-
+  visNetwork(nodes,edges, main="SETx Prepare/Mitigate Geophysical Drivers",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Geographical/Geophysical-Network Viz-Prepare
+
+```{r, include=TRUE}
+SETx_geo_prepare
+```
+
+### Geographical/Geophysical-Whole network stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Geographical/Geophysical-Node level stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Geographical/Geophysical-Network composition-Prepare
+
+```{r}
+composition5<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/51*100,
+    OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition5<-as.data.frame(composition5)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition5,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+## Prepare and mitigate - Drainage infrastructure and roads
+
+Who do you work with to prepare for and mitigate the following drivers of flooding of importance to you/your organization?
+  - Physical (roads) and drainage infrastructure
+
+```{r}
+g1_infra_prepare <- graph_from_data_frame(d=infra_prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_infra_prepare)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_infra_prepare,mode="in")
+outDegree1<-igraph::degree(g1_infra_prepare,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_infra_prepare))
+
+betweenness1 <- igraph::betweenness(g1_infra_prepare, v = V(g1_infra_prepare), directed = TRUE, weights = NULL, normalized = TRUE)
+
+inCloseness1<-igraph::closeness(g1_infra_prepare, vids = V(g1_infra_prepare), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_infra_prepare, vids = V(g1_infra_prepare), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_infra_prepare) # Total Nodes
+netstats[2]<-ecount(g1_infra_prepare) # Total Ties 
+netstats[3]<-ecount(g1_infra_prepare)/vcount(g1_infra_prepare) # Average ties per node
+netstats[4]<-dyad_census(g1_infra_prepare)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_infra_prepare)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_infra_prepare)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_infra_prepare) # Reciprocity
+netstats[8]<-edge_density(g1_infra_prepare) # Density
+netstats[9]<-transitivity(g1_infra_prepare) # Transitivity 
+netstats[10]<-centralization.degree(g1_infra_prepare)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Pr- Drainage infrastructure and roads"
+
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_infra_prepare))
+{
+  V(g1_infra_prepare)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_infra_prepare)[i]$name)]
+}
+
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="Academia"]$color <-"orange"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="State agency"]$color <- "purple"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="County agency"]$color <- "red"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_infra_prepare)[V(g1_infra_prepare)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_infra_prepare))
+{
+  V(g1_infra_prepare)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_infra_prepare)[i]$name)]
+}
+
+V(g1_infra_prepare)$size<-V(g1_infra_prepare)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_infra_prepare)
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_infra_prepare<-
+  visNetwork(nodes,edges, main="SETx Prepare/Mitigate Drainage and road infrastructure Drivers",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Drainage/road infrastructure-Network Viz-Prepare
+
+```{r, include=TRUE}
+SETx_infra_prepare
+```
+
+### Drainage/road infrastructure-Whole network stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Drainage/road infrastructure-Node level stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Drainage/road infrastructure-Network composition-Prepare
+
+```{r}
+composition6<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/52*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition6<-as.data.frame(composition6)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition6,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+## Prepare and mitigate - Population Growth
+
+Who do you work with to prepare for and mitigate the following drivers of flooding of importance to you/your organization?
+  - Population growth and distribution of people
+
+```{r}
+g1_pop_prepare <- graph_from_data_frame(d=pop_prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_pop_prepare)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_pop_prepare,mode="in")
+outDegree1<-igraph::degree(g1_pop_prepare,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_pop_prepare))
+betweenness1<-igraph::betweenness(g1_pop_prepare, v = V(g1_pop_prepare), directed = TRUE, weights = NULL,
+                                   normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_pop_prepare, vids = V(g1_pop_prepare), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_pop_prepare, vids = V(g1_pop_prepare), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_pop_prepare) # Total Nodes
+netstats[2]<-ecount(g1_pop_prepare) # Total Ties 
+netstats[3]<-ecount(g1_pop_prepare)/vcount(g1_pop_prepare) # Average ties per node
+netstats[4]<-dyad_census(g1_pop_prepare)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_pop_prepare)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_pop_prepare)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_pop_prepare) # Reciprocity
+netstats[8]<-edge_density(g1_pop_prepare) # Density
+netstats[9]<-transitivity(g1_pop_prepare) # Transitivity 
+netstats[10]<-centralization.degree(g1_pop_prepare)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Pr- Population Growth"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_pop_prepare))
+{
+  V(g1_pop_prepare)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_pop_prepare)[i]$name)]
+}
+
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="Academia"]$color <-"orange"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="State agency"]$color <- "purple"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="County agency"]$color <- "red"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_pop_prepare)[V(g1_pop_prepare)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_pop_prepare))
+{
+  V(g1_pop_prepare)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_pop_prepare)[i]$name)]
+}
+
+V(g1_pop_prepare)$size<-V(g1_pop_prepare)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_pop_prepare)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_pop_prepare<-
+  visNetwork(nodes,edges, main="SETx Prepare/Mitigate Population Growth Drivers",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Population growth-Network Viz-Prepare
+
+```{r, include=TRUE}
+SETx_pop_prepare
+```
+
+### Population growth-Whole network stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Population growth-Node level stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Population growth-Network composition-Prepare
+
+```{r}
+composition7<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/48*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition7<-as.data.frame(composition7)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition7,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+## Prepare and mitigate - Socio-economic
+
+Who do you work with to prepare for and mitigate the following drivers of flooding of importance to you/your organization?
+  - Socio-economic factors and local economy
+
+```{r}
+g1_socio_prepare <- graph_from_data_frame(d=socio_prepare_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_socio_prepare)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_socio_prepare,mode="in")
+outDegree1<-igraph::degree(g1_socio_prepare,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_socio_prepare))
+betweenness1<-igraph::betweenness(g1_socio_prepare, v = V(g1_socio_prepare), directed = TRUE, weights = NULL,
+                                   normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_socio_prepare, vids = V(g1_socio_prepare), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_socio_prepare, vids = V(g1_socio_prepare), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_socio_prepare) # Total Nodes
+netstats[2]<-ecount(g1_socio_prepare) # Total Ties 
+netstats[3]<-ecount(g1_socio_prepare)/vcount(g1_socio_prepare) # Average ties per node
+netstats[4]<-dyad_census(g1_socio_prepare)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_socio_prepare)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_socio_prepare)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_socio_prepare) # Reciprocity
+netstats[8]<-edge_density(g1_socio_prepare) # Density
+netstats[9]<-transitivity(g1_socio_prepare) # Transitivity 
+netstats[10]<-centralization.degree(g1_socio_prepare)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "Pr- Socio-economic"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_socio_prepare))
+{
+  V(g1_socio_prepare)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_socio_prepare)[i]$name)]
+}
+
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="Academia"]$color <-"orange"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="State agency"]$color <- "purple"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="County agency"]$color <- "red"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_socio_prepare)[V(g1_socio_prepare)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_socio_prepare))
+{
+  V(g1_socio_prepare)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_socio_prepare)[i]$name)]
+}
+
+V(g1_socio_prepare)$size<-V(g1_socio_prepare)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_socio_prepare)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_socio_prepare<-
+  visNetwork(nodes,edges, main="SETx Prepare/Mitigate Population Growth Drivers",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Socio-economic-Network Viz-Prepare
+
+```{r, include=TRUE}
+SETx_socio_prepare
+```
+
+### Socio-economic-Whole network stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Socio-economic-Node level stats-Prepare
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Socio-economic-Network composition-Prepare
+
+```{r}
+composition8<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/49*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition8<-as.data.frame(composition8)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition8,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+# Respond, Recover, Rebuild - Issue Networks
+
+## Respond, recover, or rebuild - Ecological impacts
+
+Who do you work with to respond, recover, or rebuild the following impacts of flooding of importance to you/your organization?
+  - Ecological impacts (e.g., impacts to beaches, rivers, habitat, trails)
+
+```{r}
+g1_eco_respond <- graph_from_data_frame(d=eco_respond_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_eco_respond)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_eco_respond,mode="in")
+outDegree1<-igraph::degree(g1_eco_respond,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_eco_respond))
+betweenness1<-igraph::betweenness(g1_eco_respond, v = V(g1_eco_respond), directed = TRUE, weights = NULL,
+                                   normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_eco_respond, vids = V(g1_eco_respond), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_eco_respond, vids = V(g1_eco_respond), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_eco_respond) # Total Nodes
+netstats[2]<-ecount(g1_eco_respond) # Total Ties 
+netstats[3]<-ecount(g1_eco_respond)/vcount(g1_eco_respond) # Average ties per node
+netstats[4]<-dyad_census(g1_eco_respond)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_eco_respond)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_eco_respond)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_eco_respond) # Reciprocity
+netstats[8]<-edge_density(g1_eco_respond) # Density
+netstats[9]<-transitivity(g1_eco_respond) # Transitivity 
+netstats[10]<-centralization.degree(g1_eco_respond)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "RR- Ecological impacts"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_eco_respond))
+{
+  V(g1_eco_respond)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_eco_respond)[i]$name)]
+}
+
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="Academia"]$color <-"orange"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="State agency"]$color <- "purple"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="County agency"]$color <- "red"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_eco_respond)[V(g1_eco_respond)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_eco_respond))
+{
+  V(g1_eco_respond)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_eco_respond)[i]$name)]
+}
+
+V(g1_eco_respond)$size<-V(g1_eco_respond)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_eco_respond)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_eco_respond<-
+  visNetwork(nodes,edges, main="SETx RRR Ecological",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Ecological impacts-Network Viz-RRR
+
+```{r, include=TRUE}
+SETx_eco_respond
+```
+
+### Ecological impacts-Whole Network Stats-RRR
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Ecological impacts-Nodel Level Stats-RRR
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Ecological impacts-Network Composition-RRR
+
+```{r}
+composition9<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/42*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition9<-as.data.frame(composition9)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition9,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```  
+
+
+## Respond, recover, or rebuild - Economic impacts
+
+Who do you work with to respond, recover, or rebuild the following impacts of flooding of importance to you/your organization?
+- Economic impacts (lost revenue, costs of recovery)
+
+```{r}
+g1_econ_respond <- graph_from_data_frame(d=econ_respond_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_econ_respond)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_econ_respond,mode="in")
+outDegree1<-igraph::degree(g1_econ_respond,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_econ_respond))
+betweenness1<-igraph::betweenness(g1_econ_respond, v = V(g1_econ_respond), directed = TRUE, weights = NULL,
+                                  normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_econ_respond, vids = V(g1_econ_respond), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_econ_respond, vids = V(g1_econ_respond), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_econ_respond) # Total Nodes
+netstats[2]<-ecount(g1_econ_respond) # Total Ties 
+netstats[3]<-ecount(g1_econ_respond)/vcount(g1_econ_respond) # Average ties per node
+netstats[4]<-dyad_census(g1_econ_respond)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_econ_respond)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_econ_respond)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_econ_respond) # Reciprocity
+netstats[8]<-edge_density(g1_econ_respond) # Density
+netstats[9]<-transitivity(g1_econ_respond) # Transitivity 
+netstats[10]<-centralization.degree(g1_econ_respond)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "RR- Economic impacts"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_econ_respond))
+{
+  V(g1_econ_respond)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_econ_respond)[i]$name)]
+}
+
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="Academia"]$color <-"orange"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="State agency"]$color <- "purple"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="County agency"]$color <- "red"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_econ_respond)[V(g1_econ_respond)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_econ_respond))
+{
+  V(g1_econ_respond)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_econ_respond)[i]$name)]
+}
+
+V(g1_econ_respond)$size<-V(g1_econ_respond)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_econ_respond)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_econ_respond<-
+  visNetwork(nodes,edges, main="SETx RRR Economic",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Economic impacts-Network Viz-RRR 
+
+```{r, include=TRUE}
+SETx_econ_respond
+```
+
+### Economic impacts-Whole network stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Economic impacts-Node level stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Economic impacts-Network composition-RRR 
+
+```{r}
+composition10<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/54*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition10<-as.data.frame(composition10)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition10,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+## Respond, recover, or rebuild - Infrastructure impacts
+
+Who do you work with to respond, recover, or rebuild the following impacts of flooding of importance to you/your organization?
+  - Infrastructure impacts (telecommunication, energy, transportation)
+
+```{r}
+g1_infra_respond <- graph_from_data_frame(d=infra_respond_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_infra_respond)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_infra_respond,mode="in")
+outDegree1<-igraph::degree(g1_infra_respond,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_infra_respond))
+betweenness1<-igraph::betweenness(g1_infra_respond, v = V(g1_infra_respond), directed = TRUE, weights = NULL,
+                                 normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_infra_respond, vids = V(g1_infra_respond), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_infra_respond, vids = V(g1_infra_respond), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_infra_respond) # Total Nodes
+netstats[2]<-ecount(g1_infra_respond) # Total Ties 
+netstats[3]<-ecount(g1_infra_respond)/vcount(g1_infra_respond) # Average ties per node
+netstats[4]<-dyad_census(g1_infra_respond)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_infra_respond)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_infra_respond)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_infra_respond) # Reciprocity
+netstats[8]<-edge_density(g1_infra_respond) # Density
+netstats[9]<-transitivity(g1_infra_respond) # Transitivity 
+netstats[10]<-centralization.degree(g1_infra_respond)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "RR- Infrastructure impacts"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_infra_respond))
+{
+  V(g1_infra_respond)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_infra_respond)[i]$name)]
+}
+
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="Academia"]$color <-"orange"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="State agency"]$color <- "purple"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="County agency"]$color <- "red"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_infra_respond)[V(g1_infra_respond)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_infra_respond))
+{
+  V(g1_infra_respond)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_infra_respond)[i]$name)]
+}
+
+V(g1_infra_respond)$size<-V(g1_infra_respond)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_infra_respond)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_infra_respond<-
+  visNetwork(nodes,edges, main="SETx RRR Infrastructure Impacts",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Infrastructure impacts-Network Viz-RRR 
+
+```{r, include=TRUE}
+SETx_infra_respond
+```
+
+### Infrastructure impacts-Whole network stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Infrastructure impacts-Node level stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Infrastructure impacts-Network composition-RRR 
+
+```{r}
+composition11<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/51*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition11<-as.data.frame(composition11)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition11,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+## Respond, recover, or rebuild - Social impacts
+
+Who do you work with to respond, recover, or rebuild the following impacts of flooding of importance to you/your organization?
+  - Social impacts (population displacement, health, social inequalities)
+
+```{r}
+g1_social_respond <- graph_from_data_frame(d=socio_respond_edges,directed=TRUE) 
+
+gvis <- toVisNetworkData(g1_social_respond)
+
+rm(DF_Centrality)
+```
+
+```{r}
+inDegree1<-igraph::degree(g1_social_respond,mode="in")
+outDegree1<-igraph::degree(g1_social_respond,mode="out")
+TotalDegree1<-as.data.frame(igraph::degree(g1_social_respond))
+betweenness1<-igraph::betweenness(g1_social_respond, v = V(g1_social_respond), directed = TRUE, weights = NULL,
+                                  normalized = TRUE)
+inCloseness1<-igraph::closeness(g1_social_respond, vids = V(g1_social_respond), mode = c("in"),normalized = TRUE)
+outCloseness1<-igraph::closeness(g1_social_respond, vids = V(g1_social_respond), mode = c("out"),normalized = TRUE)
+#eigen<-evcent(m1,g=1,gmode = "digraph",rescale=TRUE, ignore.eval=TRUE)
+#removed eigen from this DF_Centrality
+DF_Centrality<-as.data.frame(cbind(rownames(TotalDegree1),inDegree1,outDegree1,TotalDegree1,betweenness1,inCloseness1,outCloseness1))
+rownames(DF_Centrality)<-NULL
+
+colnames(DF_Centrality)[1]<-"name"
+colnames(DF_Centrality)[4]<-"TotalDegree"  
+
+DF_Centrality<-as.data.frame(DF_Centrality)|>
+  arrange(desc(inDegree1))
+
+netstats<-0
+netstats[1]<-vcount(g1_social_respond) # Total Nodes
+netstats[2]<-ecount(g1_social_respond) # Total Ties 
+netstats[3]<-ecount(g1_social_respond)/vcount(g1_social_respond) # Average ties per node
+netstats[4]<-dyad_census(g1_social_respond)$mut # Mutual Nodes
+netstats[5]<-dyad_census(g1_social_respond)$asym # Assymetric Nodes
+netstats[6]<-dyad_census(g1_social_respond)$null # Unconnected nodes
+netstats[7]<-reciprocity(g1_social_respond) # Reciprocity
+netstats[8]<-edge_density(g1_social_respond) # Density
+netstats[9]<-transitivity(g1_social_respond) # Transitivity 
+netstats[10]<-centralization.degree(g1_social_respond)$centralization # Centralization
+
+par(mfcol = c(2,1)) 
+
+statstable<-data.frame(c("Total Node","Total Ties","Average Ties per Org","Mutual Nodes \n (Pairs of vertices with two directed edges)","Assymetric Nodes \n(Pairs of vertices with one directed edge)","Unconnected Nodes \n (Pairs of vertices with no directed edges)","Reciprocity","Density","Transitivity","Centralization"),round(netstats,3))
+colnames(statstable)<-c("Network_Statistic","Value")
+
+# Merge combined_stats with statstable
+combined_stats <- merge(combined_stats, statstable, by = "Network_Statistic", all = TRUE)
+
+colnames(combined_stats)[ncol(combined_stats)] <- "RR- Social impacts"
+```
+
+```{r}
+a1<-read.csv("a1.csv")
+a1<-a1[-c(1)]
+colnames(a1)[1]<-"name"
+
+a1<-left_join(DF_Centrality, a1, by='name')
+
+
+#color by org type
+for (i in 1:vcount(g1_social_respond))
+{
+  V(g1_social_respond)[i]$orgtype<-a1$org_type[which(a1$name==V(g1_social_respond)[i]$name)]
+}
+
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="Academia"]$color <-"orange"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="Nonprofit"]$color <- "darkred"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="Federal agency"]$color <- "gold"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="State agency"]$color <- "purple"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="County agency"]$color <- "red"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="Municipal"]$color <- "darkblue"
+V(g1_social_respond)[V(g1_social_respond)$orgtype=="Other"]$color <- "pink"
+
+
+
+lnodes <- data.frame(label = c("Nonprofit", "University-based","Federal Agency","State Agency","County Agency", "Municipal", "Other"),
+                     color.background = c("darkred","orange", "gold", "purple","red", "darkblue", "pink"),
+                     color.border = c("darkred","orange", "gold", "purple","blue", "pink", "red"),
+                     shape=c("dot","dot","dot","dot","dot", "dot", "dot"))
+
+#size
+
+for (i in 1:vcount(g1_social_respond))
+{
+  V(g1_social_respond)[i]$size<-DF_Centrality$TotalDegree[which(DF_Centrality$name==V(g1_social_respond)[i]$name)]
+}
+
+V(g1_social_respond)$size<-V(g1_social_respond)$size*1.2
+
+
+gvis<-toVisNetworkData(g1_social_respond)
+
+# Check if gvis$nodes is not empty
+if (nrow(gvis$nodes) == 0) {
+    stop("gvis$nodes is empty")
+}
+
+# Sort the nodes data frame by 'label' or 'id'
+sorted_nodes <- gvis$nodes[order(gvis$nodes$label), ]
+
+
+# Assign to nodes
+nodes <- sorted_nodes
+
+#nodes <- sort(gvis$nodes)
+edges <- gvis$edges
+
+SETx_social_respond<-
+  visNetwork(nodes,edges, main="SETx RRR Social Impacts",width = "100%",height = "850px") %>%
+  visLayout(randomSeed = 123) %>%
+  visEdges(smooth =T,
+           arrows =list(to = list(enabled = TRUE, scaleFactor = .5)),
+           color = list(color = "lightblue", highlight = "black"))  %>% 
+  visPhysics(stabilization = FALSE)  %>%
+  visIgraphLayout(smooth=FALSE,physics=FALSE, layout="layout_nicely") %>%
+  visLayout(randomSeed = 123,improvedLayout = TRUE)%>%
+  visInteraction(navigationButtons = TRUE)%>%
+  visOptions(selectedBy = list(variable = c("orgtype"), multiple = TRUE),
+             highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = TRUE)%>%
+  addFontAwesome() %>%
+  visLegend(position = "left", addNodes = lnodes, useGroups = FALSE,stepY=100)
+
+```
+
+### Social impacts-Network Viz-RRR 
+
+```{r, include=TRUE}
+SETx_social_respond
+```
+
+### Social impacts-Whole network stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(statstable,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Social impacts-Node level stats-RRR 
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+DF_Centrality<-DF_Centrality|>
+  dplyr::arrange(desc(betweenness1))
+
+my_kable(DF_Centrality,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+### Social impacts-Network composition-RRR 
+
+```{r}
+composition12<-group_by(a1, org_type)|>
+  summarise(
+    count = n(),
+    composition_pct =n()/52*100,
+     OutdegreeMean = mean(outDegree1, na.rm = TRUE),
+    IndegreeMean=mean(inDegree1, na.rm = TRUE),
+    BetweennessMean= mean(betweenness1, na.rm = TRUE))
+
+composition12<-as.data.frame(composition12)|>
+  arrange(desc(count))|>
+  filter(count >= 1)
+```
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+kable(composition12,format="html")%>%
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+# Comparision Across Networks
+
+## Issue Network Comparision
+
+```{r}
+#Impacts
+
+eco_count<-vcount(g1_eco_respond) # Total Nodes
+eco_edge<-ecount(g1_eco_respond) # Total Ties 
+eco_perorg<-ecount(g1_eco_respond)/vcount(g1_eco_respond) # Average ties per node
+eco_density<-edge_density(g1_eco_respond) # Density
+eco_triangle<-transitivity(g1_eco_respond) # Transitivity 
+eco_central<-centralization.degree(g1_eco_respond)$centralization # Centralization
+eco_importance<-impact_bar$avg[1]
+
+IssueNetworks<-as.data.frame(cbind(eco_importance,eco_count, eco_edge, eco_perorg, eco_density, eco_triangle, eco_central))
+
+colnames(IssueNetworks)[1]<-"avg importance"
+colnames(IssueNetworks)[2]<-"# of orgs"
+colnames(IssueNetworks)[3]<-"# of edges"
+colnames(IssueNetworks)[4]<-"edges / org"
+colnames(IssueNetworks)[5]<-"density"
+colnames(IssueNetworks)[6]<-"transitivity"
+colnames(IssueNetworks)[7]<-"centralization"
+
+
+rownames(IssueNetworks)[1]<-"Ecological Impacts"
+
+econ_count<-vcount(g1_econ_respond) # Total Nodes
+econ_edge<-ecount(g1_econ_respond) # Total Ties 
+econ_perorg<-ecount(g1_econ_respond)/vcount(g1_econ_respond) # Average ties per node
+econ_density<-edge_density(g1_econ_respond) # Density
+econ_triangle<-transitivity(g1_econ_respond) # Transitivity 
+econ_central<-centralization.degree(g1_econ_respond)$centralization # Centralization
+econ_importance<-impact_bar$avg[2]
+
+EconomicNetwork<-as.data.frame(cbind(econ_importance, econ_count, econ_edge, econ_perorg, econ_density, econ_triangle, econ_central))
+
+colnames(EconomicNetwork)[1]<-"avg importance"
+colnames(EconomicNetwork)[2]<-"# of orgs"
+colnames(EconomicNetwork)[3]<-"# of edges"
+colnames(EconomicNetwork)[4]<-"edges / org"
+colnames(EconomicNetwork)[5]<-"density"
+colnames(EconomicNetwork)[6]<-"transitivity"
+colnames(EconomicNetwork)[7]<-"centralization"
+
+
+rownames(EconomicNetwork)[1]<-"Economic Impacts"
+
+
+infraR_count<-vcount(g1_infra_respond) # Total Nodes
+infraR_edge<-ecount(g1_infra_respond) # Total Ties 
+infraR_perorg<-ecount(g1_infra_respond)/vcount(g1_infra_respond) # Average ties per node
+infraR_density<-edge_density(g1_infra_respond) # Density
+infraR_triangle<-transitivity(g1_infra_respond) # Transitivity 
+infraR_central<-centralization.degree(g1_infra_respond)$centralization # Centralization
+infraR_importance<-impact_bar$avg[3]
+
+InfraRNetwork<-as.data.frame(cbind(infraR_importance, infraR_count, infraR_edge, infraR_perorg, infraR_density, infraR_triangle, infraR_central))
+
+colnames(InfraRNetwork)[1]<-"avg importance"
+colnames(InfraRNetwork)[2]<-"# of orgs"
+colnames(InfraRNetwork)[3]<-"# of edges"
+colnames(InfraRNetwork)[4]<-"edges / org"
+colnames(InfraRNetwork)[5]<-"density"
+colnames(InfraRNetwork)[6]<-"transitivity"
+colnames(InfraRNetwork)[7]<-"centralization"
+
+
+rownames(InfraRNetwork)[1]<-"Infrastructure Impacts"
+
+social_count<-vcount(g1_social_respond) # Total Nodes
+social_edge<-ecount(g1_social_respond) # Total Ties 
+social_perorg<-ecount(g1_social_respond)/vcount(g1_social_respond) # Average ties per node
+social_density<-edge_density(g1_social_respond) # Density
+social_triangle<-transitivity(g1_social_respond) # Transitivity 
+social_central<-centralization.degree(g1_social_respond)$centralization # Centralization
+social_importance<-impact_bar$avg[4]
+
+SocialNetwork<-as.data.frame(cbind(social_importance, social_count, social_edge, social_perorg, social_density, social_triangle, social_central))
+
+colnames(SocialNetwork)[1]<-"avg importance"
+colnames(SocialNetwork)[2]<-"# of orgs"
+colnames(SocialNetwork)[3]<-"# of edges"
+colnames(SocialNetwork)[4]<-"edges / org"
+colnames(SocialNetwork)[5]<-"density"
+colnames(SocialNetwork)[6]<-"transitivity"
+colnames(SocialNetwork)[7]<-"centralization"
+
+
+rownames(SocialNetwork)[1]<-"Social Impacts"
+
+# Drivers
+
+precip_count<-vcount(g1_precip_prepare) # Total Nodes
+precip_edge<-ecount(g1_precip_prepare) # Total Ties 
+precip_perorg<-ecount(g1_precip_prepare)/vcount(g1_precip_prepare) # Average ties per node
+precip_density<-edge_density(g1_precip_prepare) # Density
+precip_triangle<-transitivity(g1_precip_prepare) # Transitivity 
+precip_central<-centralization.degree(g1_precip_prepare)$centralization # Centralization
+precip_importance<-driver_bar$avg[1]
+
+PrecipNetwork<-as.data.frame(cbind(precip_importance, precip_count, precip_edge, precip_perorg, precip_density, precip_triangle, precip_central))
+
+colnames(PrecipNetwork)[1]<-"avg importance"
+colnames(PrecipNetwork)[2]<-"# of orgs"
+colnames(PrecipNetwork)[3]<-"# of edges"
+colnames(PrecipNetwork)[4]<-"edges / org"
+colnames(PrecipNetwork)[5]<-"density"
+colnames(PrecipNetwork)[6]<-"transitivity"
+colnames(PrecipNetwork)[7]<-"centralization"
+
+
+rownames(PrecipNetwork)[1]<-"Precip/Weather Drivers"
+
+
+geo_count<-vcount(g1_geo_prepare) # Total Nodes
+geo_edge<-ecount(g1_geo_prepare) # Total Ties 
+geo_perorg<-ecount(g1_geo_prepare)/vcount(g1_geo_prepare) # Average ties per node
+geo_density<-edge_density(g1_geo_prepare) # Density
+geo_triangle<-transitivity(g1_geo_prepare) # Transitivity 
+geo_central<-centralization.degree(g1_geo_prepare)$centralization # Centralization
+geo_importance<-driver_bar$avg[2]
+
+GeoNetwork<-as.data.frame(cbind(geo_importance, geo_count, geo_edge, geo_perorg, geo_density, geo_triangle, geo_central))
+
+colnames(GeoNetwork)[1]<-"avg importance"
+colnames(GeoNetwork)[2]<-"# of orgs"
+colnames(GeoNetwork)[3]<-"# of edges"
+colnames(GeoNetwork)[4]<-"edges / org"
+colnames(GeoNetwork)[5]<-"density"
+colnames(GeoNetwork)[6]<-"transitivity"
+colnames(GeoNetwork)[7]<-"centralization"
+
+
+rownames(GeoNetwork)[1]<-"Geophysical Drivers"
+
+infraD_count<-vcount(g1_infra_prepare) # Total Nodes
+infraD_edge<-ecount(g1_infra_prepare) # Total Ties 
+infraD_perorg<-ecount(g1_infra_prepare)/vcount(g1_infra_prepare) # Average ties per node
+infraD_density<-edge_density(g1_infra_prepare) # Density
+infraD_triangle<-transitivity(g1_infra_prepare) # Transitivity 
+infraD_central<-centralization.degree(g1_infra_prepare)$centralization # Centralization
+infraD_importance<-driver_bar$avg[3]
+
+InfraDNetwork<-as.data.frame(cbind(infraD_importance, infraD_count, infraD_edge, infraD_perorg, infraD_density, infraD_triangle, infraD_central))
+
+colnames(InfraDNetwork)[1]<-"avg importance"
+colnames(InfraDNetwork)[2]<-"# of orgs"
+colnames(InfraDNetwork)[3]<-"# of edges"
+colnames(InfraDNetwork)[4]<-"edges / org"
+colnames(InfraDNetwork)[5]<-"density"
+colnames(InfraDNetwork)[6]<-"transitivity"
+colnames(InfraDNetwork)[7]<-"centralization"
+
+
+rownames(InfraDNetwork)[1]<-"Infrastructure Drivers"
+
+pop_count<-vcount(g1_pop_prepare) # Total Nodes
+pop_edge<-ecount(g1_pop_prepare) # Total Ties 
+pop_perorg<-ecount(g1_pop_prepare)/vcount(g1_pop_prepare) # Average ties per node
+pop_density<-edge_density(g1_pop_prepare) # Density
+pop_triangle<-transitivity(g1_pop_prepare) # Transitivity 
+pop_central<-centralization.degree(g1_pop_prepare)$centralization # Centralization
+pop_importance<-driver_bar$avg[4]
+
+PopNetwork<-as.data.frame(cbind(pop_importance, pop_count, pop_edge, pop_perorg, pop_density, pop_triangle, pop_central))
+
+colnames(PopNetwork)[1]<-"avg importance"
+colnames(PopNetwork)[2]<-"# of orgs"
+colnames(PopNetwork)[3]<-"# of edges"
+colnames(PopNetwork)[4]<-"edges / org"
+colnames(PopNetwork)[5]<-"density"
+colnames(PopNetwork)[6]<-"transitivity"
+colnames(PopNetwork)[7]<-"centralization"
+
+rownames(PopNetwork)[1]<-"Population Drivers"
+
+socio_count<-vcount(g1_socio_prepare) # Total Nodes
+socio_edge<-ecount(g1_socio_prepare) # Total Ties 
+socio_perorg<-ecount(g1_socio_prepare)/vcount(g1_socio_prepare) # Average ties per node
+socio_density<-edge_density(g1_socio_prepare) # Density
+socio_triangle<-transitivity(g1_socio_prepare) # Transitivity 
+socio_central<-centralization.degree(g1_socio_prepare)$centralization # Centralization
+socio_importance<-driver_bar$avg[5]
+
+SocioNetwork<-as.data.frame(cbind(socio_importance, socio_count, socio_edge, socio_perorg, socio_density, socio_triangle, socio_central))
+
+colnames(SocioNetwork)[1]<-"avg importance"
+colnames(SocioNetwork)[2]<-"# of orgs"
+colnames(SocioNetwork)[3]<-"# of edges"
+colnames(SocioNetwork)[4]<-"edges / org"
+colnames(SocioNetwork)[5]<-"density"
+colnames(SocioNetwork)[6]<-"transitivity"
+colnames(SocioNetwork)[7]<-"centralization"
+
+
+rownames(SocioNetwork)[1]<-"Socio-economic Drivers"
+
+IssueNetworks<-rbind(IssueNetworks, EconomicNetwork, InfraRNetwork, SocialNetwork,PrecipNetwork, GeoNetwork, InfraDNetwork, PopNetwork, SocioNetwork)
+
+IssueNetworks<-IssueNetworks |>
+  arrange(desc(`avg importance`))
+```
+
+
+```{r, include=TRUE}
+kable(IssueNetworks,format="html")|>
+  kable_styling(bootstrap_options = c("striped", "hover","responsive"),full_width = F)
+```
+
+
+```{r}
+rm(IssueNetworks, EconomicNetwork, InfraRNetwork, SocialNetwork,PrecipNetwork, GeoNetwork, InfraDNetwork, PopNetwork, SocioNetwork)
+
+```
+
+

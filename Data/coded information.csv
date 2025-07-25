@@ -1,0 +1,43 @@
+,confidencey,usefulness,,,,,,,,,
+american red cross,2.666666667,2.9,,,,,,,,,texas water development board
+army corps of engineers,3.208333333,3.2,,,,,,,,,texas general land office
+floodplain administrator chambers county,3.5,3.5,,,,,,,,,texas division of emergency management2
+floodplain administrator hardin county,3,3,,,,,,,,,the lower neches valley authority
+floodplain administrator jasper county,2.8,3,,,,,,,,,the sabine river authority of texas
+floodplain administrator liberty county,3,#DIV/0!,,,,,,,,,texas department of public safety
+floodplain administrator newton county,#DIV/0!,#DIV/0!,,,,,,,,,jefferson county drainage district 3
+floodplain administrator orange county,3,3.25,,,,,,,,,jefferson county drainage district 6
+floodplain manager jefferson county,2.909090909,2.888888889,,,,,,,,,jefferson county drainage district 7
+jasper newton sabine emergency management system,3.333333333,3.142857143,,,,,,,,,orange county drainage district
+jefferson county drainage district 3,3.25,3.25,,,,,,,,,floodplain administrator hardin county
+jefferson county drainage district 6,3.5,3.294117647,,,,,,,,,floodplain administrator newton county
+jefferson county drainage district 7,3.769230769,3.25,,,,,,,,,floodplain administrator orange county
+lamar university,2.842105263,2.952380952,,,,,,,,,floodplain administrator chambers county
+national flood insurance program,3.153846154,3,,,,,,,,,floodplain administrator jasper county
+national weather service lake charles office,3.058823529,3.6,,,,,,,,,floodplain administrator liberty county
+office of emergency management chambers county,3.333333333,3.4,,,,,,,,,floodplain manager jefferson county
+office of emergency management hardin,2.75,3.181818182,,,,,,,,,office of emergency management hardin
+office of emergency management jefferson,2.944444444,3.117647059,,,,,,,,,jasper newton sabine emergency management system
+office of emergency management liberty county,3.25,3.333333333,,,,,,,,,office of emergency management orange county
+office of emergency management orange county,3.25,3.375,,,,,,,,,office of emergency management jefferson
+office of emergency management tyler,3,2,,,,,,,,,office of emergency management liberty county
+orange county drainage district,3.4,3.333333333,,,,,,,,,office of emergency management chambers county
+texas commission on environmental quality,2.75,2.875,,,,,,,,,office of emergency management tyler
+texas department of insurance,2.5,2.75,,,,,,,,,army corps of engineers
+texas department of public safety,3,2.882352941,,,,,,,,,us geological survey
+texas department of transportation,2.888888889,2.95,,,,,,,,,lamar university
+texas division of emergency management,3.181818182,3.47826087,,,,,,,,,trinity bay conservation district
+texas division of emergency management2,3.142857143,3.321428571,,,,,,,,,the national weather service houston galveston office
+texas engineering extension service,2.571428571,2.571428571,,,,,,,,,texas task force one
+texas general land office,2.9,2.85,,,,,,,,,texas engineering extension service
+texas health and human services commission,2,3,,,,,,,,,texas department of transportation
+texas natural resources information system,3.5,3.444444444,,,,,,,,,texas parks and wildlife department
+texas parks and wildlife department,2.6,3,,,,,,,,,texas health and human services commission
+texas task force one,2.6,2.8,,,,,,,,,texas division of emergency management
+texas water development board,3.25,3.16,,,,,,,,,texas natural resources information system
+the lower neches valley authority,3.153846154,2.866666667,,,,,,,,,texas commission on environmental quality
+the national weather service houston galveston office,3.214285714,3.785714286,,,,,,,,,the texas clean rivers program
+the sabine river authority of texas,3.076923077,3,,,,,,,,,texas department of insurance
+the texas clean rivers program,1,1.5,,,,,,,,,national flood insurance program
+trinity bay conservation district,3.833333333,3.2,,,,,,,,,american red cross
+us geological survey,3,3.285714286,,,,,,,,,national weather service lake charles office

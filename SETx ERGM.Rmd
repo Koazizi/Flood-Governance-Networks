@@ -1,0 +1,503 @@
+---
+title: "SETx ERGM"
+output: html_document
+date: "2024-02-11"
+---
+
+
+
+# Exponetial Random Graph Models
+
+## ERGM-SETx All Issues
+
+Our second approach is to reduce the network to only those who reported risk and impacts.
+
+```{r g_out}
+g_out<-igraph::degree(g1,mode="out")
+V(g1)$outdegree<-g_out
+g1_no_out<-delete_vertices(g1, V(g1)[outdegree==0])
+a1<-read.csv("a1.csv")
+
+
+
+# Remove the column named 'precip'
+a1 <- a1[ , !(names(a1) %in% c("precip"))]
+
+gvis_no_out<-toVisNetworkData(g1_no_out)
+nodelist_no_out<-gvis_no_out$nodes
+
+a2<-as.data.frame(nodelist_no_out)
+
+
+
+# Perform left join with different column names
+a2 <- left_join(a2, a1, by = "id" )
+a2<-a2[-c(3:4)]
+a2 <- a2 %>% mutate(precip = precip.1)
+
+```
+
+
+https://statnet.org/Workshops/ergm_tutorial.html#7_Diagnostics:\_troubleshooting_and_checking_for_model_degeneracy
+
+First let's build a network object and model that accounts for the full network of 61 nodes that includes the data imputation.
+
+gwdsp(decay, fixed=FALSE, cutoff=30) (binary) (directed) (undirected) (curved) Geometrically weighted dyadwise shared partner distribution: This term adds one network statistic to the model equal to the geometrically weighted dyadwise shared partner distribution with decay parameter decay parameter, which should be non-negative. The value supplied for this parameter may be fixed (if fixed=TRUE), or it may be used instead as the starting value for the estimation of decay in a curved exponential family model (when fixed=FALSE, the default) (see Hunter and Handcock, 2006). This term can be used with directed and undirected networks.
+
+For directed networks, only outgoing two-path ("OTP") shared partners are counted. In other words, for a (directed) dyad (i,j) in a directed graph, the number of shared partners counted by gwdsp is the number of nodes k that have edges i -\> k -\> j. (These may also be called homogeneous shared partners.) To count other types of shared partners instead, see dgwdsp.
+
+The optional argument cutoff sets the number of underlying DSP terms to use in computing the statistics when fixed=FALSE, in order to reduce the computational burden. Its default value can also be controlled by the gw.cutoff term option control parameter. (See control.ergm.).
+
+"dyadwise shared partners" means: how many common neighbors do two vertices have? It's a trivial matrix operation that's easily implemented in any scientific computing system (including R): square the adjacency matrix and discard the diagonal.
+
+"edgewise shard partners" means: how many common neighbors do two connected vertices have? Thus the same and above, but mask the squared adjacency matrix with the original one.
+
+The GWESP is similar to a triangles parameter (the number of closed triangles in a model, with the distinction that the GWESP is less susceptible to model degeneracy. If one of your parameters in the estimation does a similar thing to the GWESP (e.g. a homophily term), then there can be a high correlation between the parameters.
+
+```{r SETx full network object build}
+neta1<-a1
+neta1 <- mutate(a1, org_type = case_when(
+    org_type == "Nonprofit" ~ "Nonprofit",
+    org_type == "Academia" ~ "Academia",
+    org_type == "County agency" ~ "Local Gov",
+    org_type == "State agency" ~ "State Gov",
+    org_type == "Federal agency" ~ "Fed Gov",
+    org_type == "Municipal" ~ "Local Gov",
+    org_type == "Other" ~ "State Gov"
+    
+  ))
+
+neta1$org_type <-
+  factor(neta1$org_type, levels = c("Local Gov", "State Gov", "Fed Gov", "Nonprofit", "Academia"))
+
+table(neta1$org_type)
+
+
+# Function to impute missing values with the mean of the org_type group
+impute_with_group_mean <- function(data, attribute, group) {
+  data[[attribute]] <- ave(data[[attribute]], data[[group]], FUN = function(x) {
+    ifelse(is.na(x), mean(x, na.rm = TRUE), x)
+  })
+  return(data)
+}
+
+# Impute missing values for Confident and Information based on org_type
+neta1 <- impute_with_group_mean(neta1, "Confident", "org_type")
+neta1 <- impute_with_group_mean(neta1, "Information", "org_type")
+
+
+
+
+g1<-simplify(g1)
+setxnet <- as.network(x = as_edgelist(g1),
+# collab_edges is the edge list created in the V3_SETx Network Analysis.qmd
+                        directed = TRUE,
+# specify whether the network is directed
+                        matrix.type="edgelist",
+                        loops = FALSE)
+
+#org demographics
+set.vertex.attribute(setxnet, "name", neta1[,1])
+set.vertex.attribute(setxnet, "org type", as.character(neta1$org_type))
+
+#drivers of risk
+set.vertex.attribute(setxnet, "precip.1", as.numeric(neta1$precip))
+set.vertex.attribute(setxnet, "topography", as.numeric(neta1$topography))
+set.vertex.attribute(setxnet, "infrastructure_driver", as.numeric(neta1$infrastructure_driver))
+set.vertex.attribute(setxnet, "pop_growth", as.numeric(neta1$pop_growth))
+set.vertex.attribute(setxnet, "socio_economic", as.numeric(neta1$socio_economic))
+
+#prioritize impacts
+set.vertex.attribute(setxnet, "ecological", as.numeric(neta1$ecological))
+set.vertex.attribute(setxnet, "economic", as.numeric(neta1$economic))
+set.vertex.attribute(setxnet, "infrastructure_impact", as.numeric(neta1$infrastructure_impact))
+set.vertex.attribute(setxnet, "social_equity", as.numeric(neta1$social_equity))
+set.vertex.attribute(setxnet, "Confident", as.numeric(neta1$Confident))
+set.vertex.attribute(setxnet, "Information", as.numeric(neta1$Information))
+
+#alternatively, this code will input vector info
+#setxnet%v%"precip" <- as.numeric(neta1$precip)
+
+#Bernoulli null
+setxnetmodel.01<-ergm(setxnet~edges,control=control.ergm(MCMLE.maxit=2))
+summary(setxnetmodel.01)
+
+# 
+# # Identify vertices with missing precip.1 values
+# vertices_to_remove <- which(is.na(setxnet %v% "precip.1"))
+# 
+# # Remove these vertices from the network
+# setxnet <- delete.vertices(setxnet, vertices_to_remove)
+
+
+#all impact and driver variables 
+set.seed(1021221)
+
+setxnetmodel.all<-ergm(setxnet~
+                          edges+
+                          gwesp(decay = .5, fixed = T)+
+                          gwidegree(decay = 1, fixed = T)+
+                          nodematch("org type")+
+                          nodecov("ecological")+
+                          absdiff("ecological")+
+                          nodecov("economic")+
+                          absdiff("economic")+
+                          nodecov("infrastructure_impact")+
+                          absdiff("infrastructure_impact")+
+                          nodecov("social_equity")+
+                          absdiff("social_equity")+
+                          nodecov("precip.1")+
+                          absdiff("precip.1")+
+                          nodecov("topography")+
+                          absdiff("topography")+
+                          nodecov("infrastructure_driver")+
+                          absdiff("infrastructure_driver")+
+                          nodecov("pop_growth")+
+                          absdiff("pop_growth")+
+                          nodecov("socio_economic")+
+                          absdiff("socio_economic") +
+                          nodecov("Confident") +
+                          absdiff("Confident") +
+                          nodecov("Information") +
+                          absdiff("Information"),
+                          control = control.ergm(MCMLE.density.guard = 200, 
+                                    
+                                                 MCMLE.maxit = 2,
+                                                 MCMLE.effectiveSize=NULL,
+                                                 MCMC.interval = 10000),
+                                                 verbose=T)
+                                                 
+# # Reset graphical parameters
+# graphics.off()
+# 
+# # Set plot layout and adjust margins
+# par(mfrow = c(1, 1))
+# par(mar = c(8, 8, 8, 8))
+# 
+# # Open a new larger plotting window using x11()
+# x11(width = 12, height = 12)
+
+# Run MCMC diagnostics
+#mcmc.diagnostics(setxnetmodel.all)
+
+# Summary of the model
+summary(setxnetmodel.all)
+
+# # Goodness of Fit analysis
+mod.fit <- gof(setxnetmodel.all, GOF = ~ distance + espartners + idegree + odegree)
+summary(mod.fit)
+# 
+# # Plot the GOF results
+# par(mfrow = c(2, 2))
+# plot(mod.fit, main = "GOF - Drivers")
+# par(mfrow = c(1, 1))
+# 
+# # Save MCMC diagnostics to a file if necessary
+# png("mcmc_diagnostics.png", width = 1200, height = 1200)
+#mcmc.diagnostics(setxnetmodel.all)
+# dev.off()
+```
+
+## ERGM-SETx Prepare and Mitigate
+
+```{r}
+g1_prepare<-simplify(g1_pr)
+setxnet_pre <- as.network(x = as_edgelist(g1_prepare),
+                      # collab_edges is the edge list created in the V3_SETx Network Analysis.qmd
+                      directed = TRUE,
+                      # specify whether the network is directed
+                      matrix.type="edgelist",
+                      loops = FALSE)
+
+#org demographics
+set.vertex.attribute(setxnet_pre, "name", neta1[,1])
+set.vertex.attribute(setxnet_pre, "org type", as.character(neta1$org_type))
+
+#drivers of risk
+set.vertex.attribute(setxnet_pre, "precip", as.numeric(neta1$precip))
+set.vertex.attribute(setxnet_pre, "topography", as.numeric(neta1$topography))
+set.vertex.attribute(setxnet_pre, "infrastructure_driver", as.numeric(neta1$infrastructure_driver))
+set.vertex.attribute(setxnet_pre, "pop_growth", as.numeric(neta1$pop_growth))
+set.vertex.attribute(setxnet_pre, "socio_economic", as.numeric(neta1$socio_economic))
+
+#prioritize impacts
+set.vertex.attribute(setxnet_pre, "ecological", as.numeric(neta1$ecological))
+set.vertex.attribute(setxnet_pre, "economic", as.numeric(neta1$economic))
+set.vertex.attribute(setxnet_pre, "infrastructure_impact", as.numeric(neta1$infrastructure_impact))
+set.vertex.attribute(setxnet_pre, "social_equity", as.numeric(neta1$social_equity))
+set.vertex.attribute(setxnet_pre, "Confident", as.numeric(neta1$Confident))
+set.vertex.attribute(setxnet_pre, "Information", as.numeric(neta1$Information))
+
+#alternatively, this code will input vector info
+#setxnet_pre%v%"precip" <- as.numeric(neta1$precip)
+
+#Bernoulli null
+setxnet_premodel.01<-ergm(setxnet_pre~edges,control=control.ergm(MCMLE.maxit=2))
+summary(setxnet_premodel.01)
+
+# # Identify vertices with missing precip values
+# vertices_to_remove <- which(is.na(setxnet_pre %v% "precip"))
+# 
+# # If you want to remove these vertices:
+# setxnet_pre <- delete.vertices(setxnet_pre, vertices_to_remove)
+
+
+#all impact and driver variables 
+set.seed(1021)
+
+setxnet_prepare.all <- ergm(setxnet_pre~
+                            edges+
+                            gwesp(decay = .5, fixed = FALSE, cutoff=50)+
+                            gwidegree(decay = 1, fixed = FALSE, cutoff=50)+
+                         nodematch("org type")+
+                         nodecov("ecological")+
+                         absdiff("ecological")+
+                         nodecov("economic")+
+                         absdiff("economic")+
+                         nodecov("infrastructure_impact")+
+                         absdiff("infrastructure_impact")+
+                         nodecov("social_equity")+
+                         absdiff("social_equity")+
+                         nodecov("precip")+
+                         absdiff("precip")+
+                         nodecov("topography")+
+                         absdiff("topography")+
+                         nodecov("infrastructure_driver")+
+                         absdiff("infrastructure_driver")+
+                         nodecov("pop_growth")+
+                         absdiff("pop_growth")+
+                         nodecov("socio_economic")+
+                          absdiff("socio_economic") +
+                          nodecov("Confident") +
+                          absdiff("Confident") +
+                          nodecov("Information") +
+                          absdiff("Information"),
+
+  control = control.ergm(
+  MCMLE.density.guard = 200, 
+  MCMLE.maxit = 1,
+  MCMLE.effectiveSize = 500,
+  MCMC.interval = 10000,
+  SA.burnin = 1000,       # Simulated Annealing burn-in period
+
+),
+                                                 verbose=T)
+# # Reset graphical parameters
+# graphics.off()
+# 
+# # Set plot layout and adjust margins
+# par(mfrow = c(1, 1))
+# par(mar = c(5, 4, 4, 2) + 0.1)
+# 
+# # Open a new larger plotting window using x11()
+# x11(width = 12, height = 12)
+
+# Run MCMC diagnostics
+#mcmc.diagnostics(setxnet_prepare.all)
+
+# Summary of the model
+summary(setxnet_prepare.all)
+
+# # Goodness of Fit analysis
+mod.fit <- gof(setxnet_prepare.all, GOF = ~ distance + espartners + idegree + odegree)
+summary(mod.fit)
+# 
+# # Plot the GOF results
+# par(mfrow = c(2, 2))
+# plot(mod.fit, main = "GOF - Drivers")
+# par(mfrow = c(1, 1))
+# 
+# # Save MCMC diagnostics to a file if necessary
+# png("mcmc_diagnostics.png", width = 1200, height = 1200)
+# mcmc.diagnostics(setxnet_prepare.all)
+# dev.off()
+```
+
+## ERGM-SETx Respond, Recover, Rebuild
+
+```{r}
+g1_respond<-simplify(g1_rr)
+setxnet_rrr <- as.network(x = as_edgelist(g1_respond),
+                          # collab_edges is the edge list created in the V3_SETx Network Analysis.qmd
+                          directed = TRUE,
+                          # specify whether the network is directed
+                          matrix.type="edgelist",
+                          loops = FALSE)
+
+#org demographics
+set.vertex.attribute(setxnet_rrr, "name", neta1[,1])
+set.vertex.attribute(setxnet_rrr, "org type", as.character(neta1$org_type))
+
+#drivers of risk
+set.vertex.attribute(setxnet_rrr, "precip", as.numeric(neta1$precip))
+set.vertex.attribute(setxnet_rrr, "topography", as.numeric(neta1$topography))
+set.vertex.attribute(setxnet_rrr, "infrastructure_driver", as.numeric(neta1$infrastructure_driver))
+set.vertex.attribute(setxnet_rrr, "pop_growth", as.numeric(neta1$pop_growth))
+set.vertex.attribute(setxnet_rrr, "socio_economic", as.numeric(neta1$socio_economic))
+
+#prioritize impacts
+set.vertex.attribute(setxnet_rrr, "ecological", as.numeric(neta1$ecological))
+set.vertex.attribute(setxnet_rrr, "economic", as.numeric(neta1$economic))
+set.vertex.attribute(setxnet_rrr, "infrastructure_impact", as.numeric(neta1$infrastructure_impact))
+set.vertex.attribute(setxnet_rrr, "social_equity", as.numeric(neta1$social_equity))
+set.vertex.attribute(setxnet_rrr, "Confident", as.numeric(neta1$Confident))
+set.vertex.attribute(setxnet_rrr, "Information", as.numeric(neta1$Information))
+
+#alternatively, this code will input vector info
+setxnet_rrr%v%"precip" <- as.numeric(neta1$precip)
+
+#Bernoulli null
+setxnet_rrrmodel.01<-ergm(setxnet_rrr~edges,control=control.ergm(MCMLE.maxit=2))
+summary(setxnet_rrrmodel.01)
+
+# # Identify vertices with missing precip values and remove them
+# vertices_to_remove <- which(is.na(setxnet_rrr %v% "precip"))
+# setxnet_rrr <- delete.vertices(setxnet_rrr, vertices_to_remove)
+
+
+#all impact and driver variables 
+set.seed(1021221)
+
+setxnet_respond.all<-ergm(setxnet_rrr~
+                            edges+
+                            gwesp(decay = .5, fixed = FALSE, cutoff=50)+
+                            gwidegree(decay = 1, fixed = FALSE, cutoff=50)+
+                            nodematch("org type")+
+                            nodecov("ecological")+
+                            absdiff("ecological")+
+                            nodecov("economic")+
+                            absdiff("economic")+
+                            nodecov("infrastructure_impact")+
+                            absdiff("infrastructure_impact")+
+                            nodecov("social_equity")+
+                            absdiff("social_equity")+
+                            nodecov("precip")+
+                            absdiff("precip")+
+                            nodecov("topography")+
+                            absdiff("topography")+
+                            nodecov("infrastructure_driver")+
+                            absdiff("infrastructure_driver")+
+                            nodecov("pop_growth")+
+                            absdiff("pop_growth")+
+                            nodecov("socio_economic")+
+                          absdiff("socio_economic") +
+                          nodecov("Confident") +
+                          absdiff("Confident") +
+                          nodecov("Information") +
+                          absdiff("Information"),
+                                      constraints = ~ bd(maxout = 50),   
+  control = control.ergm(
+  MCMLE.density.guard = 200, 
+  MCMLE.maxit = 1,
+  MCMLE.effectiveSize = 500,
+  MCMC.interval = 80000,
+  SA.burnin = 1000,       # Simulated Annealing burn-in period
+
+),
+                                                 verbose=T)
+# graphics.off()
+# 
+# # Set plot layout and adjust margins
+# par(mfrow = c(1, 1))
+# par(mar = c(5, 4, 4, 2) + 0.1)
+# 
+# # Open a new larger plotting window using x11()
+# x11(width = 12, height = 12)
+# 
+# # Run MCMC diagnostics
+#mcmc.diagnostics(setxnet_respond.all)
+
+# Summary of the model
+summary(setxnet_respond.all)
+
+# # Goodness of Fit analysis
+mod.fit <- gof(setxnet_respond.all, GOF = ~ distance + espartners + idegree + odegree)
+summary(mod.fit)
+# 
+# # Plot the GOF results
+# par(mfrow = c(2, 2))
+# plot(mod.fit, main = "GOF - Respond")
+# par(mfrow = c(1, 1))
+# 
+# # Save MCMC diagnostics to a file if necessary
+# png("mcmc_diagnostics_respond.png", width = 1200, height = 1200)
+# mcmc.diagnostics(setxnet_respond.all)
+# dev.off()
+
+``` 
+
+
+```{r ergm-diagnostics-and-gof, fig.width=12, fig.height=10}
+# 1. Extract raw MCMC sample matrix
+chain_mat <- as.matrix(setxnetmodel.all$sample)
+
+# 2. Panels a–f: diagnostics
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1))
+
+# a–c: trace plots for stats 1–3
+for (i in 1:3) {
+  xi <- chain_mat[, i]
+  plot(xi, type = "l",
+       xlab = "Iteration",
+       ylab = "",
+       main = paste0(letters[i], ": ", colnames(chain_mat)[i]))
+}
+
+# d–f: running standard error (sd up to t / sqrt(t))
+for (i in 1:3) {
+  xi     <- chain_mat[, i]
+  run_sd <- sapply(seq_along(xi), function(t) if (t > 1) sd(xi[1:t]) else NA)
+  run_se <- run_sd / sqrt(seq_along(xi))
+  plot(run_se, type = "l",
+       xlab = "Iteration",
+       ylab = "Running SE",
+       main = paste0(letters[3 + i], ": SE ", colnames(chain_mat)[i]))
+}
+
+# 3. Panels g–j: goodness-of-fit
+mod.fit <- gof(setxnetmodel.all, GOF = ~distance + espartners + idegree + odegree)
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+plot(mod.fit)
+
+# Define models
+models <- list(
+  "All-Issues"       = setxnetmodel.all,
+  "Prepare/Mitigate" = setxnet_prepare.all,
+  "Respond/Recover"  = setxnet_respond.all
+)
+
+# Which parameter to plot
+param <- "edges"
+
+# 3 rows (diagnostics) x 3 cols (models)
+par(mfrow = c(3, 3), mar = c(4, 4, 2, 1))
+
+# Row 1: Trace plots
+for (mod in names(models)) {
+  mat <- as.matrix(models[[mod]]$sample)
+  xi  <- mat[, param]
+  plot(xi, type = "l",
+       xlab = "Iteration", ylab = "",
+       main = paste("Trace  |", mod))
+}
+
+# Row 2: Running standard error
+for (mod in names(models)) {
+  mat    <- as.matrix(models[[mod]]$sample)
+  xi     <- mat[, param]
+  run_sd <- sapply(seq_along(xi), function(t) if(t > 1) sd(xi[1:t]) else NA)
+  run_se <- run_sd / sqrt(seq_along(xi))
+  plot(run_se, type = "l",
+       xlab = "Iteration", ylab = "Running SE",
+       main = paste("Run SE |", mod))
+}
+
+# Row 3: Autocorrelation
+for (mod in names(models)) {
+  mat <- as.matrix(models[[mod]]$sample)
+  xi  <- mat[, param]
+  acf(xi, main = paste("ACF    |", mod), sub = "")
+}
+
+
+```
